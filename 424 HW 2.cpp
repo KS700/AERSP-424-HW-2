@@ -8,6 +8,9 @@
 #include <chrono>
 #include <mutex>
 #include <random>
+#include <condition_variable>
+#include <queue>
+#include <atomic>
 //#include "matplotlibcpp.h"-------------------------------------------------------------------------------------------------------------------
 #include <cmath>
 
@@ -89,65 +92,143 @@ public:
 private:
     std::vector<Sensor*> sensors;
 };
+// Question 1 End--------------------------------------------------------------------------------
 
 // Question 2--------------------------------------------------------------------------------
-void performTask(int robotId, int tool1, int tool2) {
-    // Simulating time to grab tools
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+std::mutex tool_mutex;
+std::condition_variable tool_cv;
+int available_tools = 5;
+int current_robot = 1;
+int robots_finished = 0;
+std::chrono::steady_clock::time_point start_time;
 
-    // Simulating time to perform task
-    std::cout << "Robot " << robotId << " is performing its task..." << std::endl;
+void performTask(int robotId) {
+    std::unique_lock<std::mutex> lock(tool_mutex);
+    while ((robotId % 2 != 0 && current_robot != 1) ||
+        (robotId % 2 == 0 && current_robot != 2)) {
+        tool_cv.wait(lock);
+    }
+
+    while (available_tools < 2) {
+        tool_cv.wait(lock);
+    }
+    available_tools -= 2;
+    std::cout << "Robot " << robotId << " acquired tools and starts performing a task." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    lock.unlock();
+
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    // Simulating time to return tools
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    std::cout << "Robot " << robotId << " completed its task and returned tools." << std::endl;
+    lock.lock();
+    available_tools += 2;
+    std::cout << "Robot " << robotId << " finished the task and returned the tools." << std::endl;
+    lock.unlock();
+    tool_cv.notify_all();
+
+    if (robotId % 2 == 0) {
+        current_robot = 1;
+    }
+    else {
+        current_robot = 2;
+    }
+    tool_cv.notify_all();
+
+    // Increase the counter of robots finished
+    {
+        std::lock_guard<std::mutex> counter_lock(tool_mutex);
+        robots_finished++;
+    }
+
+    // Check if all robots have finished
+    if (robots_finished == 5) {
+        std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count();
+        std::cout << "Total duration: " << duration << " seconds" << std::endl;
+    }
 }
+// Question 2 End--------------------------------------------------------------------------------
 
 // Question 3--------------------------------------------------------------------------------
-std::mutex mtx; // Mutex for controlling access to the ATC
-class ATC {
-public:
-    void processAircraft(int aircraftId) {
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1)); // Simulate landing process
-            mtx.lock(); // Lock mutex to access ATC
-            if (trafficPattern.size() < maxTrafficPatternSize) {
-                if (!isTalking) {
-                    std::cout << "ATC: Pilot " << aircraftId << ", you're clear to land." << std::endl;
-                    isTalking = true;
-                }
-                trafficPattern.push_back(aircraftId);
-                mtx.unlock(); // Release mutex
-                return;
-            }
-            else {
-                std::cout << "ATC: Traffic pattern is full, Pilot " << aircraftId << " diverting to other airports." << std::endl;
-                mtx.unlock(); // Release mutex
-                return;
-            }
-        }
+std::mutex mtx;
+std::condition_variable cv;
+std::atomic<int> numAircrafts{0};
+std::atomic<bool> atcTalking{false};
+std::atomic<bool> runwayFree{true};
+std::queue<int> waitingAircrafts;
+
+void pilot(int pilotId) {
+    std::unique_lock<std::mutex> lock(mtx);
+
+    // Request landing
+    std::cout << "Aircraft #" << pilotId << " requesting landing." << std::endl;
+
+    // Wait for ATC to become available or traffic pattern to have space
+    while (atcTalking || (!runwayFree && numAircrafts >= 3)) {
+        waitingAircrafts.push(pilotId);
+        cv.wait(lock);
     }
 
-    void releaseATC() {
-        mtx.lock(); // Lock mutex to access ATC
-        if (!trafficPattern.empty()) {
-            int releasedAircraft = trafficPattern.front();
-            trafficPattern.erase(trafficPattern.begin());
-            std::cout << "ATC: Pilot " << releasedAircraft << ", you've landed. ATC going to sleep." << std::endl;
-            isTalking = false;
-        }
-        mtx.unlock(); // Release mutex
+    // Check if the traffic pattern is full
+    if (!runwayFree && numAircrafts >= 3) {
+        std::cout << "Approach pattern full. Aircraft #" << pilotId << " redirected to another airport." << std::endl;
+        return;
     }
 
-private:
-    std::vector<int> trafficPattern;
-    bool isTalking = false;
-    const int maxTrafficPatternSize = 3;
-};
+    // Pilot establishes communication with ATC
+    atcTalking = true;
+    std::cout << "Aircraft #" << pilotId << " is cleared to land." << std::endl;
+
+    // Simulate landing process
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    runwayFree = true;
+
+    // ATC becomes available
+    atcTalking = false;
+    std::cout << "Runway is now free." << std::endl;
+
+    // Notify other pilots and ATC
+    cv.notify_all();
+}
+
+void airTrafficController() {   // DOES NOT WORK---------------------------------------------------------------------------------------------------------------
+    std::unique_lock<std::mutex> lock(mtx);
+
+    while (numAircrafts < 10) {
+        // Wait for incoming aircraft
+        cv.wait(lock);
+
+        // If all aircraft have landed, exit loop
+        if (numAircrafts == 10) {
+            break;
+        }
+
+        // Check if there are waiting aircrafts
+        if (!waitingAircrafts.empty()) {
+            int waitingPilotId = waitingAircrafts.front();
+            waitingAircrafts.pop();
+
+            // Pilot establishes communication with ATC
+            atcTalking = true;
+            std::cout << "Aircraft #" << waitingPilotId << " is cleared to land." << std::endl;
+
+            // Simulate landing process
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            runwayFree = true;
+
+            // ATC becomes available
+            atcTalking = false;
+            std::cout << "Runway is now free." << std::endl;
+
+            // Notify other pilots and ATC
+            cv.notify_all();
+        }
+    }
+}
+// Question 3 End--------------------------------------------------------------------------------
 
 // Question 4--------------------------------------------------------------------------------
-//namespace plt = matplotlibcpp;--------------------------------------------------------------------------------------------------------------
+//namespace plt = matplotlibcpp;------------------------------------------------------------------------------------------------------------------------------
+// Question 4 End--------------------------------------------------------------------------------
 
 int main() {
 std::cout << "############### Question 1 ###############" << std::endl;
@@ -163,41 +244,42 @@ std::cout << "############### Question 1 ###############" << std::endl;
 std::cout << "############# End Question 1 #############\n" << std::endl;
 
 std::cout << "############### Question 2 ###############" << std::endl;
-    // Robot ids and tool ids
-    int robots[5] = { 1, 2, 3, 4, 5 };
-    int tools[5][2] = { {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 1} };
+    start_time = std::chrono::steady_clock::now();
 
-    // Start threads for each robot
-    std::thread threads[5];
+    std::thread robots[5];
     for (int i = 0; i < 5; ++i) {
-        threads[i] = std::thread(performTask, robots[i], tools[i][0], tools[i][1]);
+        robots[i] = std::thread(performTask, i + 1);
     }
 
-    // Join threads
     for (int i = 0; i < 5; ++i) {
-        threads[i].join();
+        robots[i].join();
     }
 std::cout << "############# End Question 2 #############\n" << std::endl;
 
 std::cout << "############### Question 3 ###############" << std::endl;
-    ATC atc;
-    std::vector<std::thread> threads2;
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(1, 10);
+    std::vector<std::thread> aircraftThreads;
 
-    for (int i = 1; i <= 10; ++i) {
-        int delay = dis(gen);
-        std::this_thread::sleep_for(std::chrono::seconds(delay)); // Randomize arrival time
-        threads2.push_back(std::thread(&ATC::processAircraft, &atc, i));
+    // Create ATC thread
+    std::thread atcThread(airTrafficController);
+
+    // Create threads for 10 pilots
+    for (int i = 0; i < 10; ++i) {
+        aircraftThreads.emplace_back(pilot, i);
+        // Simulate random arrival time for each aircraft
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        // Increment number of aircrafts
+        numAircrafts++;
+        // Notify ATC of incoming aircraft
+        cv.notify_one();
     }
 
-    for (auto& t : threads2) {
+    // Join pilot threads
+    for (auto& t : aircraftThreads) {
         t.join();
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for the last aircraft to land
-    atc.releaseATC(); // Release the ATC after the last aircraft lands
+    // Join ATC thread
+    atcThread.join();
 std::cout << "############# End Question 3 #############\n" << std::endl;
 
 std::cout << "############### Question 4 ###############" << std::endl;
@@ -227,7 +309,7 @@ std::cout << "############# End Question 4 #############\n" << std::endl;
 }
 
 
-// Written answers to final 2 HW questions
+// Written answers to final 2 HW questions------MAKE TXT FILES AND ZIP WITH CODE-------------------------------------------------------------------------------------------------------------
 
 /* Question 5--------------------------------------------------------------------------------
     The tool might become duplicated????????????
@@ -235,7 +317,7 @@ std::cout << "############# End Question 4 #############\n" << std::endl;
 */
 
 /* Question 6--------------------------------------------------------------------------------
-    One aircraft will be in the process of landing and if that takes too long all others will be diverted.????????????
+    One aircraft will be in the process of landing and if that takes too long all others will be diverted. Infinite loop.
 
 
 */
