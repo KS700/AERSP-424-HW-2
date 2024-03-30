@@ -1,0 +1,5 @@
+From Question 2, what issues may happen if the robot that finished the
+task is assigned a new task immediately? And what will be a potential
+solution for the issues?
+
+There can be multiple issues like resource contention, task dependency, and thread synchronizaton. Since all these tasks require the tools to complete if the tools are not relased as soon as the task is complete can cause deadlock or resource starvation. Assigning the tasks too early could lead to incorrect behavior. Thread synchronization could lead to race conditions or other unexpected behaviors. To try and solve/prevent these issues, is to add a delay or wait period before assigning a robot a task. This would allow for the resources to be properly released as well as ensuring there are no race conditions being caused by allowing the synchronization conditions to be met before giving a robot a new task.

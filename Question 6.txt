@@ -1,0 +1,6 @@
+From Question 3, what issues you might obtain during the development of
+the program? What issues do you think will happen if some of the actions,
+e.g., waking up the ATC, checking the traffic pattern, entering the traffic
+pattern, diverging to another airport, etc., take time to finish? And what
+will be a potential solution for the issues?
+
