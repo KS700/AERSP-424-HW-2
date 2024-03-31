@@ -31,7 +31,7 @@ void AirTrafficController::addToTrafficPattern(int id) {
     trafficPatternCount++;
     std::cout << "Aircraft #" << id << " requesting landing.\n";
     if (trafficPatternCount == 1 && runwayClear) {
-        std::cout << "ATC approves landing for Aircraft #" << id << ".\n";
+        std::cout << "Aircraft #" << id << " is cleared to land.\n";
         runwayClear = false;
     }
     else {
@@ -50,7 +50,7 @@ void AirTrafficController::removeFromTrafficPattern() {
     if (!landingQueue.empty()) {
         int nextAircraft = landingQueue.front(); 
         landingQueue.pop(); 
-        std::cout << "ATC approves landing for Aircraft #" << nextAircraft << " (from queue).\n";
+        std::cout << "Aircraft #" << nextAircraft << " is cleared to land.\n";
         runwayClear = false; 
     }
 }
@@ -73,7 +73,8 @@ void simulateLanding(int id, AirTrafficController& atc, long long& totalLandingT
             atc.addToTrafficPattern(id);
         }
         else {
-            std::cout << "Aircraft #" << id << " diverts to another airport.\n";
+            std::cout << "Approach pattern full. Aircraft #" << id << " redirected to another airport.\n";
+            std::cout << "Aircraft #" << id << " is flying to another airport.\n";
             return;
         }
     }
