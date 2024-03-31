@@ -1,5 +1,6 @@
 #include "Question1.h"
 
+// Call Sensor Classes
 void TemperatureSensor::gatherData() {
     std::cout << "Gathering data from Temperature Sensor." << std::endl;
 }
@@ -24,6 +25,7 @@ void PositionSensor::processData() {
     std::cout << "Processing data from Position Sensor." << std::endl;
 }
 
+// Factory Method
 Sensor* SensorFactory::createSensor(const std::string& sensorType) {
     if (sensorType == "Temperature")
         return new TemperatureSensor();
@@ -35,6 +37,7 @@ Sensor* SensorFactory::createSensor(const std::string& sensorType) {
         return nullptr;
 }
 
+// Call Control Class
 void AerospaceControlSystem::addSensor(Sensor* sensor) {
     sensors.push_back(sensor);
 }

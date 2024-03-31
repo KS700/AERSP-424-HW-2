@@ -7,10 +7,10 @@
 // Includes 3 lines (Total, Induced, and Parasite)
 
 // Constants for drag coefficient equation (Random constants picked)
-const float CD0 = 0.02; // Zero-lift drag coefficient
-const float k = 0.03;   // Constant related to the aircraft
-const float AR = 8.0;    // Aspect ratio of the wing
-const float e = 0.9;     // Oswald efficiency factor
+const float CD0 = 0.02;     // Zero-lift drag coefficient
+const float k = 0.03;       // Constant related to the aircraft
+const float AR = 8.0;       // Aspect ratio of the wing
+const float e = 0.9;        // Oswald efficiency factor
 
 // Function to calculate parasite drag coefficient for given lift-to-drag ratio
 float calculateParasiteDragCoefficient(float LD) {
@@ -23,6 +23,7 @@ float calculateInducedDragCoefficient(float CL) {
 }
 
 int main() {
+    // OpenGL Setup start--------------------------------------------------------------------------------
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
@@ -44,6 +45,7 @@ int main() {
     }
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    // OpenGL Setup end----------------------------------------------------------------------------------
 
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
